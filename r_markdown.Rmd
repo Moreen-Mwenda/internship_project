@@ -1,0 +1,172 @@
+---
+title: "Baseline mental health measures among kenyan youths"
+output: prettydoc::html_pretty
+author: "Moreen Mwenda"
+date: "2023-08-31"
+always_allow_html: true
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+
+#load packages
+if(!require(pacman)) install.packages(pacman)
+pacman::p_load(here,
+               tidyverse,
+               plotly,
+               janitor,
+               knitr,
+               flextable,
+               dplyr,
+               tinytex)
+
+#load data
+data <- read_csv(here("shamiri_imputed_dataset.csv"))
+
+```
+
+```{r}
+# data cleaning and combination
+combined_data <- data %>% 
+  rowwise() %>% 
+  mutate(phq_score = sum(c_across(contains("PHQ")), na.rm = T),
+         gad_score = sum(c_across(contains("GAD")), na.rm = T),
+         msss_total_score = sum(c_across(contains("MSSS")), na.rm = T)) %>% 
+  mutate(family_msss_score = sum(MSSS3, MSSS4, MSSS8, MSSS11),
+         friends_msss_score = sum(MSSS6, MSSS7, MSSS9, MSSS12),
+         significant_other_score = sum(MSSS1, MSSS2, MSSS5, MSSS10)) %>% 
+  mutate(Gender = case_when(Gender == "F" ~ "Female",
+                 Gender == "M" ~ "Male")) %>% 
+  clean_names() %>% 
+  select(participant_id, phq_score, gad_score, msss_total_score, family_msss_score,        friends_msss_score, significant_other_score, tribe, gender, school, age, school_resources) %>% 
+  ungroup()
+```
+
+```{r}
+# grouping of the scores
+clean_data <- combined_data %>% 
+  rowwise() %>%
+  mutate(depression_level = case_when(phq_score >= 20 ~ "Severe Depression",
+                                      phq_score >= 15 ~ "Moderately Severe Depression",
+                                      phq_score >= 10 ~ "Moderate Depression",
+                                      phq_score >= 5 ~ "Mild Depression",
+                                      TRUE ~ "Minimal Depression")) %>%
+  mutate(anxiety_level = case_when(gad_score >= 15 ~ "Severe Anxiety",
+                                   gad_score >= 10 ~ "Moderate Anxiety",
+                                   gad_score >= 5 ~ "Mild Anxiety",
+                                   TRUE ~ "Minimal Anxiety")) %>% 
+  select(participant_id, age, gender, tribe, school, school_resources, phq_score, depression_level, gad_score, anxiety_level, everything())
+ 
+```
+
+```{r}
+# getting to know the data
+# gender (number for each gender)
+clean_data %>% 
+  group_by(gender) %>% 
+  summarise(count = n()) %>% 
+  ungroup()
+
+#schools (respondents per school)
+clean_data %>% 
+  group_by(school) %>% 
+  summarise(count = n()) %>% 
+  ungroup()
+```
+
+```{r}
+#what are the depression and anxiety levels by school
+clean_data %>% 
+  group_by(school, depression_level) %>%
+  summarise(count = n()) %>% 
+  pivot_wider(values_from = "count",
+              names_from = "depression_level") %>% 
+  ungroup() %>% 
+  kable(title = "Count of Students per Level of Depression")
+  
+# anxiety
+clean_data %>% 
+  group_by(school, anxiety_level) %>%
+  summarise(count = n()) %>% 
+  pivot_wider(values_from = "count",
+              names_from = "anxiety_level") %>% 
+  ungroup() %>% 
+  kable(title = "Count of Students per Level of Anxiety")
+```
+
+
+```{r}
+# visualization
+long_format <- combined_data %>% 
+  pivot_longer(cols = 2:4 ,
+               names_to = "score_type",
+               values_to = "values") %>% 
+  mutate(score_type = recode(score_type, gad_score = "Anxiety Score",
+                             phq_score = "Depression Score",
+                             msss_total_score = "Perceived Social Support Score")) %>% 
+  select(gender, age,score_type, values)
+
+# plot
+ggplot(data = long_format,
+       mapping = aes(x = age,
+                     y = values,
+                     color = score_type)) +
+  geom_smooth() +
+  theme_bw() +
+  labs(title = "Correlation between Depression, Anxiety and Perceived Social Support Amongst High School students",
+       x = "Age",
+       y = "Score",
+       color = "Score Type") +
+  facet_wrap(~ gender)
+```
+
+```{r}
+# msss score visualization
+support_data <- clean_data %>% 
+  pivot_longer(12:14,
+               names_to = "score_type",
+               values_to = "values") %>% 
+  mutate(score_type = recode(score_type, family_msss_score = "Family Support",
+                             friends_msss_score = "Friend Support",
+                             significant_other_score = "Significant Support")) %>% 
+  select(score_type, values, age, gender, tribe, depression_level)
+
+#plot
+ggplot(data = support_data,
+       mapping = aes(x = age,
+       y = values,
+       color = score_type)) +
+  geom_smooth() +
+  geom_point(alpha = 0.3) +
+  labs(title = "Distribution of Social Support Score by Age",
+       x = "Age",
+       y = "Score Value") 
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
